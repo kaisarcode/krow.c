@@ -42,6 +42,15 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Releas
 
 ---
 
+## Performance
+Real-world benchmarks for *libkrow.c* on standard hardware (x86_64, NVMe SSD).
+
+* **Throughput:** 7,622,681 ops/s
+* **Latency:** 131.19 ns/op
+* **Total Time (1M inserts):** 0.1312s
+
+---
+
 ## Public API
 ```c
 #include "krow.h"
