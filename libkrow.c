@@ -204,37 +204,23 @@ static int kc_map_resize(kc_map_t *m, size_t new_size) {
     HANDLE new_map;
     void *new_ptr;
 
-    UnmapViewOfFile(m->ptr);
-    CloseHandle(m->map);
-
     size_high = (DWORD)(new_size >> 32);
     size_low = (DWORD)(new_size & 0xFFFFFFFF);
 
     new_map = CreateFileMappingA(m->file, NULL, PAGE_READWRITE,
         size_high, size_low, NULL);
     if (!new_map) {
-        size_high = (DWORD)(m->size >> 32);
-        size_low = (DWORD)(m->size & 0xFFFFFFFF);
-        m->map = CreateFileMappingA(m->file, NULL, PAGE_READWRITE,
-            size_high, size_low, NULL);
-        if (m->map) {
-            m->ptr = MapViewOfFile(m->map, FILE_MAP_ALL_ACCESS, 0, 0, m->size);
-        }
         return -1;
     }
 
     new_ptr = MapViewOfFile(new_map, FILE_MAP_ALL_ACCESS, 0, 0, new_size);
     if (!new_ptr) {
         CloseHandle(new_map);
-        size_high = (DWORD)(m->size >> 32);
-        size_low = (DWORD)(m->size & 0xFFFFFFFF);
-        m->map = CreateFileMappingA(m->file, NULL, PAGE_READWRITE,
-            size_high, size_low, NULL);
-        if (m->map) {
-            m->ptr = MapViewOfFile(m->map, FILE_MAP_ALL_ACCESS, 0, 0, m->size);
-        }
         return -1;
     }
+
+    UnmapViewOfFile(m->ptr);
+    CloseHandle(m->map);
 
     m->map = new_map;
     m->ptr = new_ptr;
@@ -339,8 +325,9 @@ void kc_krow_close(kc_krow_t *ctx) {
 int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
     uint64_t slot;
     uint64_t i;
-    uint64_t target_idx;
-    int found_tombstone;
+    int64_t first_empty_slot;
+    int64_t first_tombstone_slot;
+    int64_t target_idx;
 
     if (ctx->header->count >= ctx->header->capacity) {
         kc_krow_die("krow: capacity reached");
@@ -363,40 +350,46 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
     }
 
     slot = (key * 11400714819323198485ULL) % ctx->header->capacity;
-    target_idx = 0;
-    found_tombstone = 0;
+    first_empty_slot = -1;
+    first_tombstone_slot = -1;
 
     for (i = 0; i < ctx->header->capacity; i++) {
         uint64_t idx = (slot + i) % ctx->header->capacity;
-        
+
         if (ctx->index[idx].length == 0) {
-            if (!found_tombstone) {
-                target_idx = idx;
+            if (first_empty_slot == -1) {
+                first_empty_slot = (int64_t)idx;
             }
             break;
         }
 
         if (ctx->index[idx].length == (uint64_t)-1) {
-            if (!found_tombstone) {
-                target_idx = idx;
-                found_tombstone = 1;
+            if (first_tombstone_slot == -1) {
+                first_tombstone_slot = (int64_t)idx;
             }
         }
     }
 
-    if (!found_tombstone && ctx->index[target_idx].length != 0) {
+    if (first_tombstone_slot != -1) {
+        target_idx = first_tombstone_slot;
+    } else {
+        target_idx = first_empty_slot;
+    }
+
+    if (target_idx == -1) {
         return KC_KROW_ERROR;
     }
 
     memcpy(ctx->heap + ctx->header->data_tail, value, size);
     ctx->index[target_idx].key = key;
     ctx->index[target_idx].offset = ctx->header->data_tail;
-    ctx->index[target_idx].length = size;
-    ctx->header->data_tail += size;
-    
-    if (!found_tombstone) {
+
+    if (ctx->index[target_idx].length == 0) {
         ctx->header->count++;
     }
+
+    ctx->index[target_idx].length = size;
+    ctx->header->data_tail += size;
 
     return KC_KROW_OK;
 }
@@ -416,6 +409,7 @@ int kc_krow_get(kc_krow_t *ctx, uint64_t key, kc_krow_cb cb, void *arg) {
     slot = (key * 11400714819323198485ULL) % ctx->header->capacity;
     for (i = 0; i < ctx->header->capacity; i++) {
         uint64_t idx = (slot + i) % ctx->header->capacity;
+
         if (ctx->index[idx].length == 0) {
             break;
         }
@@ -448,6 +442,7 @@ int kc_krow_del(kc_krow_t *ctx, uint64_t key) {
     slot = (key * 11400714819323198485ULL) % ctx->header->capacity;
     for (i = 0; i < ctx->header->capacity; i++) {
         uint64_t idx = (slot + i) % ctx->header->capacity;
+
         if (ctx->index[idx].length == 0) {
             break;
         }
