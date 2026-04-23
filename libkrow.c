@@ -271,10 +271,10 @@ kc_krow_t *kc_krow_open(const char *path, uint64_t capacity) {
 #endif
 
     header_size = sizeof(kc_krow_header_t);
-    index_size = capacity * sizeof(kc_krow_node_t);
     initial_heap = 1024 * 1024 * 64;
 
     if (is_new) {
+        index_size = capacity * sizeof(kc_krow_node_t);
         map_size = header_size + index_size + initial_heap;
     }
 
@@ -294,8 +294,9 @@ kc_krow_t *kc_krow_open(const char *path, uint64_t capacity) {
         exit(1);
     }
 
+    index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
     ctx->index = (kc_krow_node_t *)((uint8_t *)ctx->header + header_size);
-    ctx->heap = (uint8_t *)ctx->header;
+    ctx->heap = (uint8_t *)ctx->map.ptr + header_size + index_size;
 
     return ctx;
 }
@@ -328,6 +329,10 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
     int64_t first_empty_slot;
     int64_t first_tombstone_slot;
     int64_t target_idx;
+    int is_empty_insert;
+    size_t header_size;
+    size_t index_size;
+    uint64_t relative_tail;
 
     if (ctx->header->count >= ctx->header->capacity) {
         kc_krow_die("krow: capacity reached");
@@ -344,9 +349,10 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
         }
 
         ctx->header = (kc_krow_header_t *)ctx->map.ptr;
-        ctx->index = (kc_krow_node_t *)((uint8_t *)ctx->header +
-            sizeof(kc_krow_header_t));
-        ctx->heap = (uint8_t *)ctx->header;
+        header_size = sizeof(kc_krow_header_t);
+        index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
+        ctx->index = (kc_krow_node_t *)((uint8_t *)ctx->header + header_size);
+        ctx->heap = (uint8_t *)ctx->map.ptr + header_size + index_size;
     }
 
     slot = (key * 11400714819323198485ULL) % ctx->header->capacity;
@@ -372,24 +378,28 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
 
     if (first_tombstone_slot != -1) {
         target_idx = first_tombstone_slot;
-    } else {
+        is_empty_insert = 0;
+    } else if (first_empty_slot != -1) {
         target_idx = first_empty_slot;
-    }
-
-    if (target_idx == -1) {
+        is_empty_insert = 1;
+    } else {
         return KC_KROW_ERROR;
     }
 
-    memcpy(ctx->heap + ctx->header->data_tail, value, size);
+    header_size = sizeof(kc_krow_header_t);
+    index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
+    relative_tail = ctx->header->data_tail - (header_size + index_size);
+
+    memcpy(ctx->heap + relative_tail, value, size);
+
     ctx->index[target_idx].key = key;
     ctx->index[target_idx].offset = ctx->header->data_tail;
-
-    if (ctx->index[target_idx].length == 0) {
-        ctx->header->count++;
-    }
-
     ctx->index[target_idx].length = size;
     ctx->header->data_tail += size;
+
+    if (is_empty_insert) {
+        ctx->header->count++;
+    }
 
     return KC_KROW_OK;
 }
@@ -405,8 +415,14 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
 int kc_krow_get(kc_krow_t *ctx, uint64_t key, kc_krow_cb cb, void *arg) {
     uint64_t slot;
     uint64_t i;
+    size_t header_size;
+    size_t index_size;
+    uint64_t relative_offset;
 
     slot = (key * 11400714819323198485ULL) % ctx->header->capacity;
+    header_size = sizeof(kc_krow_header_t);
+    index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
+
     for (i = 0; i < ctx->header->capacity; i++) {
         uint64_t idx = (slot + i) % ctx->header->capacity;
 
@@ -419,7 +435,9 @@ int kc_krow_get(kc_krow_t *ctx, uint64_t key, kc_krow_cb cb, void *arg) {
         }
 
         if (ctx->index[idx].key == key) {
-            if (cb(key, ctx->heap + ctx->index[idx].offset,
+            relative_offset = ctx->index[idx].offset -
+                (header_size + index_size);
+            if (cb(key, ctx->heap + relative_offset,
                 ctx->index[idx].length, arg) != 0) {
                 break;
             }
@@ -450,7 +468,9 @@ int kc_krow_del(kc_krow_t *ctx, uint64_t key) {
         if (ctx->index[idx].length != (uint64_t)-1 &&
             ctx->index[idx].key == key) {
             ctx->index[idx].length = (uint64_t)-1;
-            ctx->header->count--;
+            if (ctx->header->count > 0) {
+                ctx->header->count--;
+            }
         }
     }
 
