@@ -336,10 +336,13 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
     int64_t first_empty_slot;
     int64_t first_tombstone_slot;
     int64_t target_idx;
-    int is_empty_insert;
     size_t header_size;
     size_t index_size;
     uint64_t relative_tail;
+
+    if (!value || size == 0) {
+        return KC_KROW_ERROR;
+    }
 
     if (ctx->header->count >= ctx->header->capacity) {
         return KC_KROW_ERROR;
@@ -385,10 +388,8 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
 
     if (first_tombstone_slot != -1) {
         target_idx = first_tombstone_slot;
-        is_empty_insert = 0;
     } else if (first_empty_slot != -1) {
         target_idx = first_empty_slot;
-        is_empty_insert = 1;
     } else {
         return KC_KROW_ERROR;
     }
@@ -404,9 +405,7 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
     ctx->index[target_idx].length = size;
     ctx->header->data_tail += size;
 
-    if (is_empty_insert) {
-        ctx->header->count++;
-    }
+    ctx->header->count++;
 
     return KC_KROW_OK;
 }
@@ -442,6 +441,10 @@ int kc_krow_get(kc_krow_t *ctx, uint64_t key, kc_krow_cb cb, void *arg) {
         }
 
         if (ctx->index[idx].key == key) {
+            if (ctx->index[idx].offset < header_size + index_size) {
+                continue;
+            }
+
             if (ctx->index[idx].offset + ctx->index[idx].length > ctx->map.size) {
                 continue;
             }
@@ -478,6 +481,7 @@ int kc_krow_del(kc_krow_t *ctx, uint64_t key) {
 
         if (ctx->index[idx].length != (uint64_t)-1 &&
             ctx->index[idx].key == key) {
+            ctx->index[idx].key = 0;
             ctx->index[idx].length = (uint64_t)-1;
             if (ctx->header->count > 0) {
                 ctx->header->count--;
