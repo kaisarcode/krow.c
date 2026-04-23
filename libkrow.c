@@ -507,6 +507,10 @@ int kc_krow_prune(kc_krow_t *ctx) {
     uint64_t base_heap_offset;
     uint64_t new_offset_cursor;
 
+    if (ctx->header->capacity == 0) {
+        return KC_KROW_ERROR;
+    }
+
     live_count = 0;
     total_bytes = 0;
 
@@ -517,14 +521,17 @@ int kc_krow_prune(kc_krow_t *ctx) {
         }
     }
 
+    header_size = sizeof(kc_krow_header_t);
+    index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
+    base_heap_offset = header_size + index_size;
+
     if (total_bytes == 0) {
         ctx->header->count = 0;
-        header_size = sizeof(kc_krow_header_t);
-        index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
-        ctx->header->data_tail = header_size + index_size;
+        ctx->header->data_tail = base_heap_offset;
 
         for (i = 0; i < ctx->header->capacity; i++) {
             ctx->index[i].key = 0;
+            ctx->index[i].offset = 0;
             ctx->index[i].length = 0;
         }
 
@@ -536,33 +543,23 @@ int kc_krow_prune(kc_krow_t *ctx) {
         return KC_KROW_ERROR;
     }
 
-    header_size = sizeof(kc_krow_header_t);
-    index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
-    base_heap_offset = header_size + index_size;
     new_offset_cursor = 0;
-
     for (i = 0; i < ctx->header->capacity; i++) {
         if (ctx->index[i].length != 0 && ctx->index[i].length != (uint64_t)-1) {
             uint64_t rel_offset = ctx->index[i].offset - base_heap_offset;
             memcpy((uint8_t *)tmp + new_offset_cursor,
                 ctx->heap + rel_offset, ctx->index[i].length);
+            ctx->index[i].offset = base_heap_offset + new_offset_cursor;
             new_offset_cursor += ctx->index[i].length;
+        } else {
+            ctx->index[i].key = 0;
+            ctx->index[i].offset = 0;
+            ctx->index[i].length = 0;
         }
     }
 
     ctx->header->count = live_count;
     ctx->header->data_tail = base_heap_offset + total_bytes;
-
-    new_offset_cursor = 0;
-    for (i = 0; i < ctx->header->capacity; i++) {
-        if (ctx->index[i].length != 0 && ctx->index[i].length != (uint64_t)-1) {
-            ctx->index[i].offset = base_heap_offset + new_offset_cursor;
-            new_offset_cursor += ctx->index[i].length;
-        } else {
-            ctx->index[i].key = 0;
-            ctx->index[i].length = 0;
-        }
-    }
 
     memcpy(ctx->heap, tmp, total_bytes);
     free(tmp);
