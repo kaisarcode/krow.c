@@ -27,6 +27,9 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Releas
 
 # Delete records
 ./krow del mydb.krow 123
+
+# Defragment heap and remove tombstones
+./krow prune mydb.krow
 ```
 
 ---
@@ -51,6 +54,9 @@ kc_krow_set(ctx, 0xABC, "Value", 5);
 
 // Delete data
 kc_krow_del(ctx, 0xABC);
+
+// Defragment store
+kc_krow_prune(ctx);
 
 // Sync to disk
 kc_krow_sync(ctx);

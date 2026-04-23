@@ -78,6 +78,13 @@ int kc_krow_get(kc_krow_t *ctx, uint64_t key, kc_krow_cb cb, void *arg);
 int kc_krow_del(kc_krow_t *ctx, uint64_t key);
 
 /**
+ * Prune tombstones and defragment heap.
+ * @param ctx Context pointer.
+ * @return Status code.
+ */
+int kc_krow_prune(kc_krow_t *ctx);
+
+/**
  * Synchronize memory map to disk.
  * @param ctx Context pointer.
  * @return Status code.

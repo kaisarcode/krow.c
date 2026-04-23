@@ -26,6 +26,7 @@ static void kc_print_help(const char *name) {
     printf("    set <key> <value>   Add a record\n");
     printf("    get <key>           Retrieve records\n");
     printf("    del <key>           Delete records\n");
+    printf("    prune              Defragment heap and remove tombstones\n");
     printf("\n");
     printf("Options:\n");
     printf("    -h, --help          Show this help message\n");
@@ -110,6 +111,13 @@ int main(int argc, char **argv) {
     } else if (strcmp(cmd, "del") == 0) {
         uint64_t key = strtoull(argv[3], NULL, 10);
         kc_krow_del(ctx, key);
+        kc_krow_sync(ctx);
+    } else if (strcmp(cmd, "prune") == 0) {
+        if (kc_krow_prune(ctx) != KC_KROW_OK) {
+            fprintf(stderr, "krow: failed to prune store\n");
+            kc_krow_close(ctx);
+            return 1;
+        }
         kc_krow_sync(ctx);
     } else {
         fprintf(stderr, "krow: unknown command %s\n", cmd);
