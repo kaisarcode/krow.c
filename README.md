@@ -16,14 +16,17 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Releas
 ### Usage
 ```bash
 # Initialize a new store with capacity for 1M records
-./krow init mydb.krow 1000000
+./krow ini mydb.krow 1000000
 
 # Add records (supports duplicate keys)
-./krow put mydb.krow 123 "User profile data"
-./krow put mydb.krow 123 "Another record for same key"
+./krow set mydb.krow 123 "User profile data"
+./krow set mydb.krow 123 "Another record for same key"
 
 # Retrieve records
 ./krow get mydb.krow 123
+
+# Delete records
+./krow del mydb.krow 123
 ```
 
 ---
@@ -44,7 +47,10 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Releas
 kc_krow_t *ctx = kc_krow_open("data.krow", 1000000);
 
 // Add data
-kc_krow_put(ctx, 0xABC, "Value", 5);
+kc_krow_set(ctx, 0xABC, "Value", 5);
+
+// Delete data
+kc_krow_del(ctx, 0xABC);
 
 // Sync to disk
 kc_krow_sync(ctx);
@@ -56,6 +62,8 @@ kc_krow_close(ctx);
 ---
 
 **Author:** KaisarCode
+
+**Email:** [kaisar@kaisarcode.com](mailto:kaisar@kaisarcode.com)
 
 **Website:** https://kaisarcode.com
 

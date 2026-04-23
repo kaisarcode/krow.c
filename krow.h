@@ -57,7 +57,7 @@ void kc_krow_close(kc_krow_t *ctx);
  * @param size Value size.
  * @return Status code.
  */
-int kc_krow_put(kc_krow_t *ctx, uint64_t key, const void *value, size_t size);
+int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size);
 
 /**
  * Retrieve records by key.
@@ -68,6 +68,14 @@ int kc_krow_put(kc_krow_t *ctx, uint64_t key, const void *value, size_t size);
  * @return Status code.
  */
 int kc_krow_get(kc_krow_t *ctx, uint64_t key, kc_krow_cb cb, void *arg);
+
+/**
+ * Delete records by key.
+ * @param ctx Context pointer.
+ * @param key Record key.
+ * @return Status code.
+ */
+int kc_krow_del(kc_krow_t *ctx, uint64_t key);
 
 /**
  * Synchronize memory map to disk.

@@ -142,7 +142,7 @@ void kc_krow_close(kc_krow_t *ctx) {
  * @param size Value size.
  * @return Status code.
  */
-int kc_krow_put(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
+int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
     uint64_t slot;
     uint64_t i;
 
@@ -151,7 +151,6 @@ int kc_krow_put(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
     }
 
     if (ctx->header->data_tail + size > ctx->map_size) {
-        /* Simple expansion strategy for minimalist design */
         size_t new_size = ctx->map_size * 2;
         while (ctx->header->data_tail + size > new_size) {
             new_size *= 2;
@@ -177,7 +176,8 @@ int kc_krow_put(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
     slot = key % ctx->header->capacity;
     for (i = 0; i < ctx->header->capacity; i++) {
         uint64_t idx = (slot + i) % ctx->header->capacity;
-        if (ctx->index[idx].length == 0) {
+        /* Empty or Tombstone */
+        if (ctx->index[idx].length == 0 || ctx->index[idx].length == (uint64_t)-1) {
             memcpy(ctx->heap + ctx->header->data_tail, value, size);
             ctx->index[idx].key = key;
             ctx->index[idx].offset = ctx->header->data_tail;
@@ -210,11 +210,42 @@ int kc_krow_get(kc_krow_t *ctx, uint64_t key, kc_krow_cb cb, void *arg) {
             break;
         }
 
+        /* Skip Tombstones */
+        if (ctx->index[idx].length == (uint64_t)-1) {
+            continue;
+        }
+
         if (ctx->index[idx].key == key) {
             if (cb(key, ctx->heap + ctx->index[idx].offset,
                 ctx->index[idx].length, arg) != 0) {
                 break;
             }
+        }
+    }
+
+    return KC_KROW_OK;
+}
+
+/**
+ * Delete records by key.
+ * @param ctx Context pointer.
+ * @param key Record key.
+ * @return Status code.
+ */
+int kc_krow_del(kc_krow_t *ctx, uint64_t key) {
+    uint64_t slot;
+    uint64_t i;
+
+    slot = key % ctx->header->capacity;
+    for (i = 0; i < ctx->header->capacity; i++) {
+        uint64_t idx = (slot + i) % ctx->header->capacity;
+        if (ctx->index[idx].length == 0) {
+            break;
+        }
+
+        if (ctx->index[idx].length != (uint64_t)-1 && ctx->index[idx].key == key) {
+            ctx->index[idx].length = (uint64_t)-1;
+            ctx->header->count--;
         }
     }
 

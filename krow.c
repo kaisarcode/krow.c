@@ -22,9 +22,10 @@ static void kc_print_help(const char *name) {
     printf("Usage: %s <command> <file> [args]\n", name);
     printf("\n");
     printf("Commands:\n");
-    printf("    init <capacity>     Initialize a new store\n");
-    printf("    put <key> <value>   Add a record\n");
+    printf("    ini <capacity>     Initialize a new store\n");
+    printf("    set <key> <value>   Add a record\n");
     printf("    get <key>           Retrieve records\n");
+    printf("    del <key>           Delete records\n");
     printf("\n");
     printf("Options:\n");
     printf("    -h, --help          Show this help message\n");
@@ -76,7 +77,7 @@ int main(int argc, char **argv) {
     cmd = argv[1];
     path = argv[2];
 
-    if (strcmp(cmd, "init") == 0) {
+    if (strcmp(cmd, "ini") == 0) {
         uint64_t cap = strtoull(argv[3], NULL, 10);
         ctx = kc_krow_open(path, cap);
         kc_krow_close(ctx);
@@ -90,18 +91,22 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (strcmp(cmd, "put") == 0) {
+    if (strcmp(cmd, "set") == 0) {
         if (argc < 5) {
             fprintf(stderr, "krow: missing value\n");
             kc_krow_close(ctx);
             return 1;
         }
         uint64_t key = strtoull(argv[3], NULL, 10);
-        kc_krow_put(ctx, key, argv[4], strlen(argv[4]));
+        kc_krow_set(ctx, key, argv[4], strlen(argv[4]));
         kc_krow_sync(ctx);
     } else if (strcmp(cmd, "get") == 0) {
         uint64_t key = strtoull(argv[3], NULL, 10);
         kc_krow_get(ctx, key, kc_on_match, NULL);
+    } else if (strcmp(cmd, "del") == 0) {
+        uint64_t key = strtoull(argv[3], NULL, 10);
+        kc_krow_del(ctx, key);
+        kc_krow_sync(ctx);
     } else {
         fprintf(stderr, "krow: unknown command %s\n", cmd);
         kc_krow_close(ctx);
