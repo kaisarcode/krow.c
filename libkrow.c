@@ -58,16 +58,6 @@ struct kc_krow {
 };
 
 /**
- * Handle critical errors by terminating the process.
- * @param msg Error message.
- * @return None.
- */
-static void kc_krow_die(const char *msg) {
-    perror(msg);
-    exit(1);
-}
-
-/**
  * Open memory map abstraction.
  * @param m Map context.
  * @param path File path.
@@ -231,6 +221,23 @@ static int kc_map_resize(kc_map_t *m, size_t new_size) {
 }
 
 /**
+ * Refresh derived pointers from the base map.
+ * @param ctx Context pointer.
+ * @return None.
+ */
+static void kc_krow_refresh_pointers(kc_krow_t *ctx) {
+    size_t header_size;
+    size_t index_size;
+
+    ctx->header = (kc_krow_header_t *)ctx->map.ptr;
+    header_size = sizeof(kc_krow_header_t);
+    index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
+
+    ctx->index = (kc_krow_node_t *)((uint8_t *)ctx->header + header_size);
+    ctx->heap = (uint8_t *)ctx->map.ptr + header_size + index_size;
+}
+
+/**
  * Initialize a new krow store.
  * @param path File path.
  * @param capacity Maximum number of index slots.
@@ -279,7 +286,8 @@ kc_krow_t *kc_krow_open(const char *path, uint64_t capacity) {
     }
 
     if (kc_map_open(&ctx->map, path, map_size, is_new) != 0) {
-        kc_krow_die("krow: map open");
+        free(ctx);
+        return NULL;
     }
 
     ctx->header = (kc_krow_header_t *)ctx->map.ptr;
@@ -290,13 +298,12 @@ kc_krow_t *kc_krow_open(const char *path, uint64_t capacity) {
         ctx->header->count = 0;
         ctx->header->data_tail = header_size + index_size;
     } else if (ctx->header->magic != KC_KROW_MAGIC) {
-        fprintf(stderr, "krow: invalid magic\n");
-        exit(1);
+        kc_map_close(&ctx->map);
+        free(ctx);
+        return NULL;
     }
 
-    index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
-    ctx->index = (kc_krow_node_t *)((uint8_t *)ctx->header + header_size);
-    ctx->heap = (uint8_t *)ctx->map.ptr + header_size + index_size;
+    kc_krow_refresh_pointers(ctx);
 
     return ctx;
 }
@@ -335,7 +342,11 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
     uint64_t relative_tail;
 
     if (ctx->header->count >= ctx->header->capacity) {
-        kc_krow_die("krow: capacity reached");
+        return KC_KROW_ERROR;
+    }
+
+    if (size > ctx->map.size) {
+        return KC_KROW_ERROR;
     }
 
     if (ctx->header->data_tail + size > ctx->map.size) {
@@ -345,14 +356,10 @@ int kc_krow_set(kc_krow_t *ctx, uint64_t key, const void *value, size_t size) {
         }
 
         if (kc_map_resize(&ctx->map, new_size) != 0) {
-            kc_krow_die("krow: map resize");
+            return KC_KROW_ERROR;
         }
 
-        ctx->header = (kc_krow_header_t *)ctx->map.ptr;
-        header_size = sizeof(kc_krow_header_t);
-        index_size = ctx->header->capacity * sizeof(kc_krow_node_t);
-        ctx->index = (kc_krow_node_t *)((uint8_t *)ctx->header + header_size);
-        ctx->heap = (uint8_t *)ctx->map.ptr + header_size + index_size;
+        kc_krow_refresh_pointers(ctx);
     }
 
     slot = (key * 11400714819323198485ULL) % ctx->header->capacity;
@@ -435,6 +442,10 @@ int kc_krow_get(kc_krow_t *ctx, uint64_t key, kc_krow_cb cb, void *arg) {
         }
 
         if (ctx->index[idx].key == key) {
+            if (ctx->index[idx].offset + ctx->index[idx].length > ctx->map.size) {
+                continue;
+            }
+
             relative_offset = ctx->index[idx].offset -
                 (header_size + index_size);
             if (cb(key, ctx->heap + relative_offset,

@@ -80,6 +80,10 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "ini") == 0) {
         uint64_t cap = strtoull(argv[3], NULL, 10);
         ctx = kc_krow_open(path, cap);
+        if (!ctx) {
+            fprintf(stderr, "krow: failed to initialize %s\n", path);
+            return 1;
+        }
         kc_krow_close(ctx);
         return 0;
     }
