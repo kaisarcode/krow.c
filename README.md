@@ -15,8 +15,6 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-The `krow` binary is generated directly in the project root.
-
 ### Usage
 
 ```bash
