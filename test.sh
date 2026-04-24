@@ -20,7 +20,7 @@ kc_test_cleanup() {
 # @param $1 Failure message.
 # @return Always 1.
 kc_test_fail() {
-    printf '[FAIL] %s\n' "$1"
+    printf '\033[31m[FAIL]\033[0m %s\n' "$1"
     return 1
 }
 
@@ -28,14 +28,13 @@ kc_test_fail() {
 # @param $1 Success message.
 # @return Always 0.
 kc_test_pass() {
-    printf '[PASS] %s\n' "$1"
+    printf '\033[32m[PASS]\033[0m %s\n' "$1"
 }
 
 # Verify the binary exists.
 # @return 0 on success, 1 on failure.
 kc_test_check_binary() {
     if [ ! -x "./krow" ]; then
-        printf '%s\n' '[ERROR] krow binary not found. Please compile first.'
         return 1
     fi
     return 0
@@ -123,8 +122,7 @@ kc_test_get_missing_key() {
     db="$KC_TEST_DIR/test-misskey.krow"
     rm -f "$db" "$db.lock"
     ./krow ini "$db" 10 >/dev/null 2>&1
-    res=$(./krow get "$db" 999 2>/dev/null)
-    if [ $? -ne 0 ]; then
+    if ! res=$(./krow get "$db" 999 2>/dev/null); then
         rm -f "$db" "$db.lock"
         kc_test_fail "get on missing key should succeed (return 0)"
         return 1
@@ -433,11 +431,9 @@ kc_test_main() {
     kc_test_multithread || failed=$((failed + 1))
 
     if [ "$failed" -eq 0 ]; then
-        printf '%s\n' '[SUCCESS] All tests passed!'
         return 0
     fi
 
-    printf '[FAILURE] %s tests failed.\n' "$failed"
     return 1
 }
 
