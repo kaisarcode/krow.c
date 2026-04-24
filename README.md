@@ -1,6 +1,9 @@
 # krow
 
-Persistent multi-value key-value store for unsigned 64-bit keys.
+Lightweight embedded key-value storage layer for unsigned 64-bit keys.
+
+krow is intended for intermediate or volatile data inside one process. It uses
+a fixed-capacity mmap-backed file and supports multiple values per key.
 
 ## Build
 
@@ -41,15 +44,18 @@ file. `kc_krow_open(path, capacity)` with `capacity > 0` creates a new
 database only.
 
 One `kc_krow_t` may be shared across threads. Public operations are serialized
-inside the context with one mutex. `kc_krow_close` is also serialized and must
-be the final operation on the context.
+inside the context with one mutex. `kc_krow_close` must be the final operation
+on the context.
 
 ## Storage
 
-krow uses an mmap-backed file with a versioned header, entry checksums, commit
-markers, and full index rebuild during open-time recovery. `prune` writes a
-compact temporary database, rebuilds the index from live records, syncs it, and
-atomically replaces the original file.
+krow uses a versioned header, entry checksums, commit markers, and full index
+rebuild during open-time recovery. Recovery is best-effort: valid committed
+entries are kept, invalid or torn entries are discarded, and recent writes may
+be lost after a crash.
+
+`prune` writes a compact temporary database, rebuilds the index from live
+records, syncs it, and atomically replaces the original file.
 
 The process model is exclusive access: only one process may open a database at
 a time. POSIX sync uses `msync` and `fsync`; Windows sync uses

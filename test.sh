@@ -119,11 +119,17 @@ kc_test_invalid_key() {
 # @return 0 on pass, 1 on fail.
 kc_test_missing_open() {
     local db
+    local out
     db="$KC_TEST_DIR/test-missing.krow"
     rm -f "$db" "$db.lock"
-    if ./krow get "$db" 1 >/dev/null 2>&1; then
+    if out=$(./krow get "$db" 1 2>/dev/null); then
         rm -f "$db" "$db.lock"
         kc_test_fail "missing store should not open"
+        return 1
+    fi
+    if [ -n "$out" ]; then
+        rm -f "$db" "$db.lock"
+        kc_test_fail "failed get should not print stdout"
         return 1
     fi
     if [ -e "$db" ]; then
