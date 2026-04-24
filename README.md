@@ -1,9 +1,10 @@
 # krow
 
-Lightweight embedded key-value storage layer for unsigned 64-bit keys.
+Lightweight mmap-backed key-value storage for arbitrary data.
 
-krow is intended for intermediate or volatile data inside one process. It uses
-a fixed-capacity mmap-backed file and supports multiple values per key.
+krow stores arbitrary byte values under unsigned 64-bit keys using a simple
+portable file format. It is designed to be fast, small, and easy to move
+between systems.
 
 ## Build
 
