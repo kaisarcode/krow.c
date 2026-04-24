@@ -1,5 +1,5 @@
 /**
- * krow.c - Summary of the functionality
+ * krow.c - Command line interface for the krow storage engine
  * Summary: Command line interface for the krow storage engine.
  *
  * Author:  KaisarCode
@@ -45,7 +45,7 @@ static int kc_parse_u64(const char *s, uint64_t *out) {
     char *end;
     unsigned long long v;
 
-    if (!s || *s == '\0') {
+    if (!s || *s == '\0' || !out || *s == '-' || *s == '+') {
         return -1;
     }
 
@@ -70,6 +70,10 @@ static int kc_parse_u64(const char *s, uint64_t *out) {
 static int kc_file_has_content(const char *path) {
     FILE *f;
     long size;
+
+    if (!path || path[0] == '\0') {
+        return 0;
+    }
 
     f = fopen(path, "rb");
     if (!f) {
@@ -111,6 +115,11 @@ static int kc_on_match(uint64_t key, const void *value, size_t size,
 static int kc_cmd_ini(const char *path, const char *cap_arg) {
     kc_krow_t *ctx;
     uint64_t cap;
+
+    if (!path || path[0] == '\0') {
+        fprintf(stderr, "krow: invalid file path\n");
+        return 1;
+    }
 
     if (kc_file_has_content(path)) {
         fprintf(stderr, "krow: %s already exists\n", path);
@@ -237,9 +246,14 @@ static int kc_cmd_prune(kc_krow_t *ctx) {
  * @return Process exit code.
  */
 static int kc_dispatch(const char *cmd, const char *path, int argc,
-    char **argv) {
+char **argv) {
     kc_krow_t *ctx;
     int rc;
+
+    if (!path || path[0] == '\0') {
+        fprintf(stderr, "krow: invalid file path\n");
+        return 1;
+    }
 
     ctx = kc_krow_open(path, 0);
     if (!ctx) {
@@ -249,17 +263,29 @@ static int kc_dispatch(const char *cmd, const char *path, int argc,
 
     rc = 1;
     if (strcmp(cmd, "set") == 0) {
-        if (argc < 5) {
-            fprintf(stderr, "krow: missing value\n");
+        if (argc != 5) {
+            fprintf(stderr, "krow: set requires key and value\n");
         } else {
             rc = kc_cmd_set(ctx, argv[3], argv[4]);
         }
     } else if (strcmp(cmd, "get") == 0) {
-        rc = kc_cmd_get(ctx, argv[3]);
+        if (argc != 4) {
+            fprintf(stderr, "krow: get requires key\n");
+        } else {
+            rc = kc_cmd_get(ctx, argv[3]);
+        }
     } else if (strcmp(cmd, "del") == 0) {
-        rc = kc_cmd_del(ctx, argv[3]);
+        if (argc != 4) {
+            fprintf(stderr, "krow: del requires key\n");
+        } else {
+            rc = kc_cmd_del(ctx, argv[3]);
+        }
     } else if (strcmp(cmd, "prune") == 0) {
-        rc = kc_cmd_prune(ctx);
+        if (argc != 3) {
+            fprintf(stderr, "krow: prune accepts no extra arguments\n");
+        } else {
+            rc = kc_cmd_prune(ctx);
+        }
     } else {
         fprintf(stderr, "krow: unknown command %s\n", cmd);
     }
@@ -288,7 +314,7 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    if (argc < 4) {
+    if (argc < 3) {
         kc_print_help(argv[0]);
         return 1;
     }
@@ -297,6 +323,10 @@ int main(int argc, char **argv) {
     path = argv[2];
 
     if (strcmp(cmd, "ini") == 0) {
+        if (argc != 4) {
+            fprintf(stderr, "krow: ini requires capacity\n");
+            return 1;
+        }
         return kc_cmd_ini(path, argv[3]);
     }
 

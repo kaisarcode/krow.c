@@ -1,65 +1,69 @@
-# krow - Persistent Multi-Value Key-Value Store
+# krow
 
-A minimalist, high-performance key-value storage engine. It provides persistence for arbitrary data rows mapped to 64-bit keys using memory mapping (mmap).
+Persistent multi-value key-value store for unsigned 64-bit keys.
 
----
-
-## Quick Start
-
-### Build
-
-Requires a C compiler and CMake 3.14+.
+## Build
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release
 ```
 
-### Usage
+## CLI
 
 ```bash
-# Initialize a new store with capacity for 1M records
-./krow ini mydb.krow 1000000
-
-# Add records (supports duplicate keys)
-./krow set mydb.krow 123 "User profile data"
-./krow set mydb.krow 123 "Another record for same key"
-
-# Retrieve records
-./krow get mydb.krow 123
-
-# Delete records
-./krow del mydb.krow 123
-
-# Defragment heap and rehash index
-./krow prune mydb.krow
+./krow ini data.krow 1000000
+./krow set data.krow 123 "value"
+./krow get data.krow 123
+./krow del data.krow 123
+./krow prune data.krow
 ```
 
----
+All CLI errors return a non-zero status and write diagnostics to stderr.
+Numeric arguments are parsed strictly.
 
-## Features
-
-- **Zero-Copy Reads:** data is accessed directly from the kernel page cache via `mmap`.
-- **Multi-Value Support:** multiple records per key via open addressing and linear probing.
-- **Crash-Safe Writes:** `set`, `del`, and `prune` survive a process crash without corrupting the store.
-- **Advisory File Lock:** prevents concurrent writers from sharing a store.
-- **Minimalist:** strict POSIX C implementation with zero external dependencies.
-
----
-
-## Public API
+## API
 
 ```c
 #include "krow.h"
 
 kc_krow_t *ctx = kc_krow_open("data.krow", 1000000);
 
-kc_krow_set(ctx, 0xABC, "Value", 5);
-kc_krow_del(ctx, 0xABC);
+kc_krow_set(ctx, 123, "value", 5);
+kc_krow_get(ctx, 123, callback, arg);
+kc_krow_del(ctx, 123);
 kc_krow_prune(ctx);
 kc_krow_sync(ctx);
 kc_krow_close(ctx);
 ```
+
+`kc_krow_open(path, 0)` opens an existing database only and never creates a
+file. `kc_krow_open(path, capacity)` with `capacity > 0` creates a new
+database only.
+
+One `kc_krow_t` may be shared across threads. Public operations are serialized
+inside the context with one mutex. `kc_krow_close` is also serialized and must
+be the final operation on the context.
+
+## Storage
+
+krow uses an mmap-backed file with a versioned header, entry checksums, commit
+markers, and full index rebuild during open-time recovery. `prune` writes a
+compact temporary database, rebuilds the index from live records, syncs it, and
+atomically replaces the original file.
+
+The process model is exclusive access: only one process may open a database at
+a time. POSIX sync uses `msync` and `fsync`; Windows sync uses
+`FlushViewOfFile` and `FlushFileBuffers`.
+
+## Tests
+
+```bash
+./test.sh
+```
+
+The test suite is functional. It covers init, set/get, multi-value records,
+delete, collision prune, missing open, invalid numbers, full capacity, reopen,
+and corrupted header rejection.
 
 ---
 
@@ -67,8 +71,8 @@ kc_krow_close(ctx);
 
 **Email:** <kaisar@kaisarcode.com>
 
-**Website:** <https://kaisarcode.com>
+**Website:** [https://kaisarcode.com](https://kaisarcode.com)
 
-**License:** <https://www.gnu.org/licenses/gpl-3.0.html>
+**License:** [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html)
 
 © 2026 KaisarCode

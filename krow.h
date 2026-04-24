@@ -1,5 +1,5 @@
 /**
- * krow.h - Summary of the functionality
+ * krow.h - Public API for the persistent krow store
  * Summary: Public API for the krow persistent key-value store.
  *
  * Author:  KaisarCode
@@ -38,12 +38,12 @@ typedef int (*kc_krow_cb)(uint64_t key, const void *value, size_t size,
  * Open or create a krow store.
  * @param path File path.
  * @param capacity Maximum number of index slots.
- * @return Context pointer.
+ * @return Context pointer or NULL on failure.
  */
 kc_krow_t *kc_krow_open(const char *path, uint64_t capacity);
 
 /**
- * Close the krow store.
+ * Close the krow store after waiting for active operations.
  * @param ctx Context pointer.
  * @return None.
  */
