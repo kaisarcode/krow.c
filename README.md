@@ -1,6 +1,6 @@
 # krow
 
-Lightweight mmap-backed key-value storage for arbitrary data.
+Lightweight embedded mmap-backed key-value storage layer.
 
 krow stores arbitrary byte values under unsigned 64-bit keys using a simple
 portable file format. It is designed to be fast, small, and easy to move
@@ -46,14 +46,16 @@ database only.
 
 One `kc_krow_t` may be shared across threads. Public operations are serialized
 inside the context with one mutex. `kc_krow_close` must be the final operation
-on the context.
+on the context and must only be called after all other threads have stopped
+using the context.
 
 ## Storage
 
 krow uses a versioned header, entry checksums, commit markers, and full index
-rebuild during open-time recovery. Recovery is best-effort: valid committed
-entries are kept, invalid or torn entries are discarded, and recent writes may
-be lost after a crash.
+rebuild during open-time recovery. Recovery rebuilds the index from valid
+committed index entries, not by scanning arbitrary heap data. Recovery is
+best-effort: valid committed entries are kept, invalid or torn entries are
+discarded, and recent writes may be lost after a crash.
 
 `prune` writes a compact temporary database, rebuilds the index from live
 records, syncs it, and atomically replaces the original file.

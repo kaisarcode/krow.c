@@ -1,6 +1,6 @@
 /**
- * krow.h - Public API for the persistent krow store
- * Summary: Public API for the krow persistent key-value store.
+ * krow.h - Public API for the krow storage layer
+ * Summary: Public API for the lightweight embedded mmap-backed key-value storage layer.
  *
  * Author:  KaisarCode
  * Website: https://kaisarcode.com
@@ -43,7 +43,7 @@ typedef int (*kc_krow_cb)(uint64_t key, const void *value, size_t size,
 kc_krow_t *kc_krow_open(const char *path, uint64_t capacity);
 
 /**
- * Close the krow store after waiting for active operations.
+ * Close the store. Caller must ensure no other thread is using the context.
  * @param ctx Context pointer.
  * @return None.
  */

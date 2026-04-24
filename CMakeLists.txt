@@ -7,8 +7,14 @@ find_package(Threads REQUIRED)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+option(KROW_NATIVE "Enable native architecture optimization" OFF)
+
 if(NOT MSVC)
-    add_compile_options(-O3 -march=native -Wall -Wextra -Werror)
+    if(KROW_NATIVE)
+        add_compile_options(-O3 -march=native -Wall -Wextra -Werror)
+    else()
+        add_compile_options(-O3 -Wall -Wextra -Werror)
+    endif()
     add_definitions(-D_GNU_SOURCE)
 else()
     add_compile_options(/O2 /W3 /WX)

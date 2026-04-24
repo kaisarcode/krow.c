@@ -115,6 +115,29 @@ kc_test_invalid_key() {
     kc_test_pass "invalid key rejection"
 }
 
+# Exercise get on a missing key.
+# @return 0 on pass, 1 on fail.
+kc_test_get_missing_key() {
+    local db
+    local res
+    db="$KC_TEST_DIR/test-misskey.krow"
+    rm -f "$db" "$db.lock"
+    ./krow ini "$db" 10 >/dev/null 2>&1
+    res=$(./krow get "$db" 999 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        rm -f "$db" "$db.lock"
+        kc_test_fail "get on missing key should succeed (return 0)"
+        return 1
+    fi
+    if [ -n "$res" ]; then
+        rm -f "$db" "$db.lock"
+        kc_test_fail "get on missing key should print nothing to stdout"
+        return 1
+    fi
+    rm -f "$db" "$db.lock"
+    kc_test_pass "get on missing key"
+}
+
 # Exercise missing file open rejection.
 # @return 0 on pass, 1 on fail.
 kc_test_missing_open() {
@@ -160,6 +183,32 @@ kc_test_prune_collision() {
         return 0
     fi
     kc_test_fail "prune preserves displaced keys (got '$res')"
+}
+
+# Exercise prune overwriting stale tmp files safely.
+# @return 0 on pass, 1 on fail.
+kc_test_prune_stale_tmp() {
+    local db
+    local res
+    db="$KC_TEST_DIR/test-stale.krow"
+    rm -f "$db" "$db.lock" "$db.tmp" "$db.tmp.lock"
+    ./krow ini "$db" 10 >/dev/null 2>&1
+    ./krow set "$db" 1 "one" >/dev/null 2>&1
+    echo "stale data" > "$db.tmp"
+    ./krow prune "$db" >/dev/null 2>&1
+    res=$(./krow get "$db" 1)
+    if [ "$res" != "one" ]; then
+        rm -f "$db" "$db.lock" "$db.tmp" "$db.tmp.lock"
+        kc_test_fail "prune failed to preserve data with stale tmp"
+        return 1
+    fi
+    if [ -e "$db.tmp" ]; then
+        rm -f "$db" "$db.lock" "$db.tmp" "$db.tmp.lock"
+        kc_test_fail "prune left behind a tmp file"
+        return 1
+    fi
+    rm -f "$db" "$db.lock" "$db.tmp" "$db.tmp.lock"
+    kc_test_pass "prune stale tmp overwrite"
 }
 
 # Exercise capacity saturation rejection.
@@ -373,7 +422,9 @@ kc_test_main() {
     rm -f "$db" "$db.lock"
 
     kc_test_missing_open || failed=$((failed + 1))
+    kc_test_get_missing_key || failed=$((failed + 1))
     kc_test_prune_collision || failed=$((failed + 1))
+    kc_test_prune_stale_tmp || failed=$((failed + 1))
     kc_test_capacity_full || failed=$((failed + 1))
     kc_test_ini_exists || failed=$((failed + 1))
     kc_test_reopen || failed=$((failed + 1))

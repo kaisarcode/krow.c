@@ -1,6 +1,6 @@
 /**
- * libkrow.c - Persistent mmap key-value store implementation
- * Summary: Core implementation of the krow storage engine.
+ * libkrow.c - Lightweight embedded mmap-backed key-value storage layer
+ * Summary: Core implementation of the lightweight embedded mmap-backed key-value storage layer.
  *
  * Author:  KaisarCode
  * Website: https://kaisarcode.com
